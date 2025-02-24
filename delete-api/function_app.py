@@ -263,3 +263,5 @@ async def delete_from_index(req: func.HttpRequest) -> func.HttpResponse:
             f"Error processing request: {str(e)}",
             status_code=500
         )
+
+#test123
