@@ -186,19 +186,65 @@ def save_json_to_blob(blob_service_client, output_json, filename):
         json_str = json.dumps(output_json, indent=2)
         blob_client.upload_blob(json_str, overwrite=True)
         print(f"JSON saved to blob storage: {filename}.json")
+        return True
         
     except Exception as e:
         print(f"Error saving JSON to blob: {str(e)}")
         print(f"Full error traceback: {traceback.format_exc()}")
+        return False
+
+def move_html_to_master_container(blob_service_client, source_container_name, blob_name):
+    """Move the HTML file to the htmlcontent-master container."""
+    try:
+        print(f"Moving HTML file {blob_name} to htmlcontent-master container")
+        
+        # Get source blob
+        source_container_client = blob_service_client.get_container_client(source_container_name)
+        source_blob_client = source_container_client.get_blob_client(blob_name)
+        
+        # Create target container if it doesn't exist
+        target_container_name = "htmlcontent-master"
+        target_container_client = blob_service_client.get_container_client(target_container_name)
+        
+        try:
+            target_container_client.get_container_properties()
+        except Exception as e:
+            print(f"Target container doesn't exist, creating new one. Error: {str(e)}")
+            target_container_client.create_container()
+            print(f"Created new container: {target_container_name}")
+        
+        # Get source blob content and properties
+        blob_content = source_blob_client.download_blob().readall()
+        blob_properties = source_blob_client.get_blob_properties()
+        
+        # Copy metadata
+        metadata = blob_properties.metadata
+        
+        # Upload to target container
+        target_blob_client = target_container_client.get_blob_client(blob_name)
+        target_blob_client.upload_blob(blob_content, overwrite=True, metadata=metadata)
+        print(f"Uploaded blob to {target_container_name}")
+        
+        # Delete from source container
+        source_blob_client.delete_blob()
+        print(f"Deleted blob from {source_container_name}")
+        
+        return True
+    
+    except Exception as e:
+        print(f"Error moving HTML file: {str(e)}")
+        print(f"Full error traceback: {traceback.format_exc()}")
+        return False
 
 async def process_file(myblob: func.InputStream, filename: str, blob_service_client):
     """Process a single file uploaded to the container."""
     try:
         print(f"Processing file: {filename}")
+        source_container_name = "htmlcontent"
         
         # Get blob client and metadata
         try:
-            blob_client = blob_service_client.get_blob_client(container="htmlcontent", blob=filename)
+            blob_client = blob_service_client.get_blob_client(container=source_container_name, blob=filename)
             blob_properties = blob_client.get_blob_properties()
             print(f"Blob properties retrieved: {blob_properties}")
             print(f"Blob metadata: {blob_properties.metadata}")
@@ -374,7 +420,16 @@ async def process_file(myblob: func.InputStream, filename: str, blob_service_cli
         
         # Save JSON
         save_filename = extract_filename_from_url(blob_url)
-        save_json_to_blob(blob_service_client, output_json, save_filename)
+        json_saved = save_json_to_blob(blob_service_client, output_json, save_filename)
+        
+        if json_saved:
+            # If JSON saved successfully, move the HTML file to master container
+            move_success = move_html_to_master_container(blob_service_client, source_container_name, filename)
+            if move_success:
+                print(f"Successfully moved HTML file {filename} to htmlcontent-master container")
+            else:
+                print(f"Failed to move HTML file {filename} to htmlcontent-master container")
+        
         print(f"Successfully processed and saved: {filename}")
         return True
             
@@ -417,4 +472,3 @@ async def main(myblob: func.InputStream) -> None:
         print(f"Error in function execution: {str(e)}")
         print(f"Full error traceback: {traceback.format_exc()}")
         raise
-#test tag123
