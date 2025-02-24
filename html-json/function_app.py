@@ -472,3 +472,5 @@ async def main(myblob: func.InputStream) -> None:
         print(f"Error in function execution: {str(e)}")
         print(f"Full error traceback: {traceback.format_exc()}")
         raise
+
+#test
