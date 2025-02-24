@@ -3,18 +3,19 @@ name: Deploy Azure Functions
 on:
   push:
     tags:
-      - 'v*-*'  # matches v1.0.0-html-json, v1.0.0-json-to-index, etc.
+      - '*'
     branches:
-      - main  # Add this if you want to ensure tags are only from main branch
-  workflow_dispatch:  # Keeps manual trigger option
+      - main
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: '3.11'
-  DEPLOYMENT_BRANCH: 'main'  # Specify which branch to deploy from
+  DEPLOYMENT_BRANCH: 'main'
 
 jobs:
   deploy:
     name: Deploy Azure Function
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,52 +43,51 @@ jobs:
             tag_identifier: "delete-api"
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+
       - name: Extract tag info
-        if: startsWith(github.ref, 'refs/tags/')
         id: tag-info
         run: |
           TAG_NAME="${GITHUB_REF#refs/tags/}"
           FUNCTION_ID=$(echo $TAG_NAME | cut -d'-' -f2-)
           echo "function_id=$FUNCTION_ID" >> $GITHUB_OUTPUT
-          echo "Extracted function ID: $FUNCTION_ID from tag: $TAG_NAME"
-
-      - name: Checkout repository
-        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.DEPLOYMENT_BRANCH }}  # Always checkout the main branch
-          fetch-depth: 0  # Fetch all history for tags
+          echo "Extracted tag name: $TAG_NAME"
+          echo "Extracted function ID: $FUNCTION_ID"
 
       - name: Verify tag is on main branch
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          # Check if the tag is on the main branch
-          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
-            echo "Error: Tag must be on the main branch"
+          git fetch origin main
+          if git branch -r --contains ${{ github.ref }} | grep -q "origin/main"; then
+            echo "Tag is on main branch"
+          else
+            echo "Tag must be on the main branch"
             exit 1
           fi
 
       - name: Setup Python
-        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
+        if: matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
+        if: matrix.tag_identifier == steps.tag-info.outputs.function_id
         run: |
           if [ -f "${{ matrix.path }}/requirements.txt" ]; then
             pip install -r ${{ matrix.path }}/requirements.txt
           fi
 
       - name: Login to Azure
-        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
+        if: matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy Function
-        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
+        if: matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: azure/functions-action@v1
         with:
           app-name: ${{ matrix.function_name }}
