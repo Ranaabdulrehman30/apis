@@ -1,0 +1,4 @@
+azure-functions
+azure-search-documents>=11.4.0
+azure-storage-blob>=12.0.0
+azure-core>=1.26.0
