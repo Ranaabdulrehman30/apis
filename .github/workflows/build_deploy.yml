@@ -2,263 +2,93 @@ name: Deploy Azure Functions
 
 on:
   push:
+    tags:
+      - 'v*-*'  # matches v1.0.0-html-json, v1.0.0-json-to-index, etc.
     branches:
-      - main
-    paths:
-      - "BlobUpload/BlobUpload/**"
-      - "UploadHtmlBody/UploadHtmlBody/**"
-      - "azure-html-search/**"
-      - "azure-pdf-search/**"
-      - "azure-semantic-search/**"
-      - "html-json/**"
-      - "json-to-index/**"
-      - "delete-api/**"
-      - "pdf-indexer-function/**"
-
-  workflow_dispatch:  # Allows manual trigger
+      - main  # Add this if you want to ensure tags are only from main branch
+  workflow_dispatch:  # Keeps manual trigger option
 
 env:
-  PYTHON_VERSION: '3.11'  # Adjust if needed
+  PYTHON_VERSION: '3.11'
+  DEPLOYMENT_BRANCH: 'main'  # Specify which branch to deploy from
 
 jobs:
   deploy:
-    name: Deploy Changed Azure Function
+    name: Deploy Azure Function
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        function_app:
-          - { name: "testt-html-search-api", path: "azure-html-search" }
-          - { name: "testt-pdf-search-api", path: "azure-pdf-search" }
-          - { name: "testt-semantic-search-api", path: "semantic-search" }
-          - { name: "html-tojson", path: "html-json" }
-          - { name: "html-to-index", path: "json-to-index" }
-          - { name: "pdf-indexer-function", path: "pdf-indexer-function" }
-          - { name: "delete-api", path: "delete-api" }
-
+        include:
+          - function_name: "testt-html-search-api"
+            path: "azure-html-search"
+            tag_identifier: "azure-html-search"
+          - function_name: "testt-pdf-search-api"
+            path: "azure-pdf-search"
+            tag_identifier: "azure-pdf-search"
+          - function_name: "testt-semantic-search-api"
+            path: "semantic-search"
+            tag_identifier: "semantic-search"
+          - function_name: "html-tojson"
+            path: "html-json"
+            tag_identifier: "html-json"
+          - function_name: "html-to-index"
+            path: "json-to-index"
+            tag_identifier: "json-to-index"
+          - function_name: "pdf-indexer-function"
+            path: "pdf-indexer-function"
+            tag_identifier: "pdf-indexer-function"
+          - function_name: "delete-api"
+            path: "delete-api"
+            tag_identifier: "delete-api"
 
     steps:
+      - name: Extract tag info
+        if: startsWith(github.ref, 'refs/tags/')
+        id: tag-info
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          FUNCTION_ID=$(echo $TAG_NAME | cut -d'-' -f2-)
+          echo "function_id=$FUNCTION_ID" >> $GITHUB_OUTPUT
+          echo "Extracted function ID: $FUNCTION_ID from tag: $TAG_NAME"
+
       - name: Checkout repository
+        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: actions/checkout@v3
-
-      - name: Check Changed Files
-        id: filter
-        uses: dorny/paths-filter@v2
         with:
-          filters: |
-            azure-html-search: 'azure-html-search/**'
-            azure-pdf-search: 'azure-pdf-search/**'
-            semantic-search: 'semantic-search/**'
-            html-json: 'html-json/**'
-            json-to-index: 'json-to-index/**'
-            delete-api: 'delete-api/**'
-            pdf-indexer-function: 'pdf-indexer-function/**'
+          ref: ${{ env.DEPLOYMENT_BRANCH }}  # Always checkout the main branch
+          fetch-depth: 0  # Fetch all history for tags
 
-      # Setup Python for azure-pdf-search
-      - name: Setup Python for azure-pdf-search
-        if: steps.filter.outputs['azure-pdf-search'] == 'true' && matrix.function_app.name == 'testt-pdf-search-api'
+      - name: Verify tag is on main branch
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # Check if the tag is on the main branch
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+            echo "Error: Tag must be on the main branch"
+            exit 1
+          fi
+
+      - name: Setup Python
+        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # Setup Python for azure-html-search
-      - name: Setup Python for azure-html-search
-        if: steps.filter.outputs['azure-html-search'] == 'true' && matrix.function_app.name == 'testt-html-search-api'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # Setup Python for semantic-search
-      - name: Setup Python for semantic-search
-        if: steps.filter.outputs['semantic-search'] == 'true' && matrix.function_app.name == 'testt-semantic-search-api'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # Setup Python for html-json
-      - name: Setup Python for html-json
-        if: steps.filter.outputs['html-json'] == 'true' && matrix.function_app.name == 'html-tojson'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          
-      # Setup Python for html-json
-      - name: Setup Python for json-to-index
-        if: steps.filter.outputs['json-to-index'] == 'true' && matrix.function_app.name == 'html-to-index'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # Setup Python for pdf-indexer-function
-      - name: Setup Python for pdf-indexer-function
-        if: steps.filter.outputs['pdf-indexer-function'] == 'true' && matrix.function_app.name == 'pdf-to-index'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # Setup Python for delete-api
-      - name: Setup Python for delete-api
-        if: steps.filter.outputs['delete-api'] == 'true' && matrix.function_app.name == 'delete-api'
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # Install dependencies for azure-pdf-search
-      - name: Install dependencies for azure-pdf-search
-        if: steps.filter.outputs['azure-pdf-search'] == 'true' && matrix.function_app.name == 'testt-pdf-search-api'
+      - name: Install dependencies
+        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
         run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
+          if [ -f "${{ matrix.path }}/requirements.txt" ]; then
+            pip install -r ${{ matrix.path }}/requirements.txt
           fi
 
-      # Install dependencies for azure-html-search
-      - name: Install dependencies for azure-html-search
-        if: steps.filter.outputs['azure-html-search'] == 'true' && matrix.function_app.name == 'testt-html-search-api'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Install dependencies for semantic-search
-      - name: Install dependencies for semantic-search
-        if: steps.filter.outputs['semantic-search'] == 'true' && matrix.function_app.name == 'testt-semantic-search-api'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Install dependencies for html-json
-      - name: Install dependencies for html-json
-        if: steps.filter.outputs['html-json'] == 'true' && matrix.function_app.name == 'html-tojson'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Install dependencies for html-to-index
-      - name: Install dependencies for json-to-index
-        if: steps.filter.outputs['json-to-index'] == 'true' && matrix.function_app.name == 'html-to-index'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Install dependencies for delete-api
-      - name: Install dependencies for delete-api
-        if: steps.filter.outputs['delete-api'] == 'true' && matrix.function_app.name == 'delete-api'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Install dependencies for pdf-indexer-function
-      - name: Install dependencies for pdf-indexer-function
-        if: steps.filter.outputs['pdf-indexer-function'] == 'true' && matrix.function_app.name == 'pdf-to-index'
-        run: |
-          if [ -f "${{ matrix.function_app.path }}/requirements.txt" ]; then
-            pip install -r ${{ matrix.function_app.path }}/requirements.txt
-          fi
-
-      # Login to Azure for azure-pdf-search
-      - name: Login to Azure for azure-pdf-search
-        if: steps.filter.outputs['azure-pdf-search'] == 'true' && matrix.function_app.name == 'testt-pdf-search-api'
+      - name: Login to Azure
+        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Login to Azure for azure-html-search
-      - name: Login to Azure for azure-html-search
-        if: steps.filter.outputs['azure-html-search'] == 'true' && matrix.function_app.name == 'testt-html-search-api'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Login to Azure for semantic-search
-      - name: Login to Azure for semantic-search
-        if: steps.filter.outputs['semantic-search'] == 'true' && matrix.function_app.name == 'testt-semantic-search-api'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Login to Azure for html-json
-      - name: Login to Azure for html-json
-        if: steps.filter.outputs['html-json'] == 'true' && matrix.function_app.name == 'html-tojson'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Login to Azure for html-to-index
-      - name: Login to Azure for json-to-index
-        if: steps.filter.outputs['json-to-index'] == 'true' && matrix.function_app.name == 'html-to-index'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Login to Azure for pdf-indexer-function
-      - name: Login to Azure for pdf-indexer-function
-        if: steps.filter.outputs['pdf-indexer-function'] == 'true' && matrix.function_app.name == 'pdf-to-index'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Login to Azure for delete-api
-      - name: Login to Azure for delete-api
-        if: steps.filter.outputs['delete-api'] == 'true' && matrix.function_app.name == 'delete-api'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Deploy azure-pdf-search
-      - name: Deploy azure-pdf-search
-        if: steps.filter.outputs['azure-pdf-search'] == 'true' && matrix.function_app.name == 'testt-pdf-search-api'
+      - name: Deploy Function
+        if: github.event_name == 'workflow_dispatch' || matrix.tag_identifier == steps.tag-info.outputs.function_id
         uses: azure/functions-action@v1
         with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy azure-html-search
-      - name: Deploy azure-html-search
-        if: steps.filter.outputs['azure-html-search'] == 'true' && matrix.function_app.name == 'testt-html-search-api'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy semantic-search
-      - name: Deploy semantic-search
-        if: steps.filter.outputs['semantic-search'] == 'true' && matrix.function_app.name == 'testt-semantic-search-api'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy html-json
-      - name: Deploy html-json
-        if: steps.filter.outputs['html-json'] == 'true' && matrix.function_app.name == 'html-tojson'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy html-to-index
-      - name: Deploy json-to-index
-        if: steps.filter.outputs['json-to-index'] == 'true' && matrix.function_app.name == 'html-to-index'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy pdf-indexer-function
-      - name: pdf-indexer-function
-        if: steps.filter.outputs['pdf-indexer-function'] == 'true' && matrix.function_app.name == 'pdf-to-index'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
-
-      # Deploy delete-api
-      - name: Deploy delete-api
-        if: steps.filter.outputs['delete-api'] == 'true' && matrix.function_app.name == 'delete-api'
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ matrix.function_app.name }}
-          package: ${{ matrix.function_app.path }}
+          app-name: ${{ matrix.function_name }}
+          package: ${{ matrix.path }}
