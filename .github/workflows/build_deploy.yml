@@ -72,16 +72,16 @@ jobs:
           ls -la codeql-reports/
 
       # Store CodeQL reports as GitHub artifacts
-      - name: Store CodeQL Reports
-        uses: actions/upload-artifact@v3
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4  # Updated to v4
         with:
           name: codeql-security-reports-${{ github.sha }}
           path: codeql-reports/
           retention-days: 90
 
       # Store the raw CodeQL database as GitHub artifact
-      - name: Store CodeQL Database
-        uses: actions/upload-artifact@v3
+      - name: Upload Database
+        uses: actions/upload-artifact@v4  # Updated to v4
         with:
           name: codeql-database-${{ github.sha }}
           path: /home/runner/work/_temp/codeql_databases
