@@ -49,68 +49,22 @@ jobs:
         run: |
           mkdir -p codeql-reports
           DATE=$(date +"%Y-%m-%d")
-          # Copy the SARIF results
-          cp sarif-results/*.sarif codeql-reports/codeql-results-$DATE.sarif || echo "No SARIF files found to copy"
           
-          # Create a simple summary file if SARIF is missing
-          if [ ! -f "$(find sarif-results -name '*.sarif' 2>/dev/null | head -1)" ]; then
-            echo "No SARIF files found to generate summary" > codeql-reports/summary-$DATE.txt
+          # Copy the SARIF results
+          if [ -d "sarif-results" ] && [ "$(find sarif-results -name '*.sarif' 2>/dev/null)" ]; then
+            cp sarif-results/*.sarif codeql-reports/codeql-results-$DATE.sarif
+            echo "SARIF file copied to codeql-reports/codeql-results-$DATE.sarif"
+            
+            # Create a simple text summary
+            echo "CodeQL Analysis Summary for $GITHUB_REPOSITORY - $DATE" > codeql-reports/summary-$DATE.txt
+            echo "========================================================" >> codeql-reports/summary-$DATE.txt
+            echo "" >> codeql-reports/summary-$DATE.txt
+            echo "Scan completed on: $(date)" >> codeql-reports/summary-$DATE.txt
+            echo "Results are available in the SARIF file." >> codeql-reports/summary-$DATE.txt
+            echo "" >> codeql-reports/summary-$DATE.txt
+            echo "View detailed results in GitHub's Security tab or download the SARIF file." >> codeql-reports/summary-$DATE.txt
           else
-            # Generate a human-readable summary report
-            echo "Creating summary report from SARIF file"
-            python3 -c "
-import json
-import glob
-import os
-
-sarif_files = glob.glob('sarif-results/*.sarif')
-if not sarif_files:
-    print('No SARIF files found')
-    with open('codeql-reports/summary-' + os.environ['DATE'] + '.txt', 'w') as f:
-        f.write('No results found to summarize')
-    exit(0)
-
-with open(sarif_files[0]) as f:
-    data = json.load(f)
-
-summary = []
-total_alerts = 0
-
-for run in data.get('runs', []):
-    tool_name = run.get('tool', {}).get('driver', {}).get('name', 'Unknown')
-    results = run.get('results', [])
-    total_alerts += len(results)
-    
-    severity_counts = {'error': 0, 'warning': 0, 'note': 0}
-    for result in results:
-        severity_counts[result.get('level', 'note')] += 1
-    
-    summary.append(f'Tool: {tool_name}')
-    summary.append(f'  Total alerts: {len(results)}')
-    summary.append(f'  Critical/Errors: {severity_counts[\"error\"]}')
-    summary.append(f'  Warnings: {severity_counts[\"warning\"]}')
-    summary.append(f'  Notes: {severity_counts[\"note\"]}')
-    
-    # Group by rule ID
-    rule_counts = {}
-    for result in results:
-        rule_id = result.get('ruleId', 'unknown')
-        if rule_id in rule_counts:
-            rule_counts[rule_id] += 1
-        else:
-            rule_counts[rule_id] = 1
-    
-    if rule_counts:
-        summary.append('  Alerts by rule:')
-        for rule_id, count in rule_counts.items():
-            summary.append(f'    {rule_id}: {count}')
-
-with open('codeql-reports/summary-' + os.environ['DATE'] + '.txt', 'w') as f:
-    f.write(f'CodeQL Analysis Summary for {os.environ[\"GITHUB_REPOSITORY\"]} - {os.environ[\"DATE\"]}\n')
-    f.write('=' * 80 + '\n\n')
-    f.write(f'Total alerts across all tools: {total_alerts}\n\n')
-    f.write('\n'.join(summary))
-"
+            echo "No SARIF files found to generate summary" > codeql-reports/summary-$DATE.txt
           fi
           
           # List the generated files
