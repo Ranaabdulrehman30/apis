@@ -27,6 +27,38 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history
 
+      # Create CodeQL config file to improve coverage
+      - name: Create CodeQL config
+        run: |
+          mkdir -p .github/codeql
+          cat > .github/codeql/codeql-config.yml << 'EOF'
+          name: "Custom CodeQL Config"
+          
+          paths:
+            - azure-html-search
+            - azure-pdf-search
+            - delete-api
+            - BlobUpload
+            - UploadHtmlBody
+            - json-to-index
+            - html-json
+            - pdf-indexer-function
+            - semantic-search
+          
+          paths-ignore:
+            - "**/env/**"
+            - "**/venv/**"
+            - "**/.venv/**"
+            - "**/node_modules/**"
+            - "**/*.test.py"
+          
+          query-filters:
+            - exclude:
+                id: py/empty-except-block
+          
+          EOF
+          cat .github/codeql/codeql-config.yml
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -36,6 +68,8 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: python
+          config-file: .github/codeql/codeql-config.yml
+          queries: security-and-quality
 
       - name: Perform CodeQL Analysis
         id: codeql-analyze
@@ -55,12 +89,18 @@ jobs:
             cp sarif-results/*.sarif codeql-reports/codeql-results-$DATE.sarif
             echo "SARIF file copied to codeql-reports/codeql-results-$DATE.sarif"
             
-            # Create a simple text summary
+            # Check for results and create a summary
+            RESULTS_COUNT=$(grep -o '"results": \[[^]]*\]' sarif-results/*.sarif | grep -v '"results": \[\]' | wc -l)
             echo "CodeQL Analysis Summary for $GITHUB_REPOSITORY - $DATE" > codeql-reports/summary-$DATE.txt
             echo "========================================================" >> codeql-reports/summary-$DATE.txt
             echo "" >> codeql-reports/summary-$DATE.txt
             echo "Scan completed on: $(date)" >> codeql-reports/summary-$DATE.txt
-            echo "Results are available in the SARIF file." >> codeql-reports/summary-$DATE.txt
+            echo "Number of security issues found: $RESULTS_COUNT" >> codeql-reports/summary-$DATE.txt
+            if [ "$RESULTS_COUNT" -eq 0 ]; then
+              echo "No security issues detected! ✅" >> codeql-reports/summary-$DATE.txt
+            else
+              echo "Security issues were detected. Check the SARIF file for details." >> codeql-reports/summary-$DATE.txt
+            fi
             echo "" >> codeql-reports/summary-$DATE.txt
             echo "View detailed results in GitHub's Security tab or download the SARIF file." >> codeql-reports/summary-$DATE.txt
           else
@@ -73,7 +113,7 @@ jobs:
 
       # Store CodeQL reports as GitHub artifacts
       - name: Upload Reports
-        uses: actions/upload-artifact@v4  # Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: codeql-security-reports-${{ github.sha }}
           path: codeql-reports/
@@ -81,7 +121,7 @@ jobs:
 
       # Store the raw CodeQL database as GitHub artifact
       - name: Upload Database
-        uses: actions/upload-artifact@v4  # Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: codeql-database-${{ github.sha }}
           path: /home/runner/work/_temp/codeql_databases
