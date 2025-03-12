@@ -3,7 +3,6 @@ import logging
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.storage.blob import BlobServiceClient
-from azure.core.exceptions import ResourceExistsError
 import os
 from typing import Optional, Tuple
 

@@ -106,15 +106,14 @@ def main(myblob: func.InputStream, context: func.Context):
             )
             
             # Copy the blob from source to target
-            source_properties = source_blob.get_blob_properties()
+            source_properties = source_blob.get_blob_properties() 
             copy = target_blob.start_copy_from_url(source_blob.url)
-            
+
             # Wait for copy to complete
-            props = target_blob.get_blob_properties()
-            while props.copy.status == 'pending':
+            while copy.status == 'pending':
                 import time
                 time.sleep(1)
-                props = target_blob.get_blob_properties()
+                copy = target_blob.get_blob_properties().copy
             
             # If copy is successful, delete the source blob
             if props.copy.status == 'success':
