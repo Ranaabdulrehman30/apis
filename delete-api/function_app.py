@@ -118,10 +118,13 @@ def find_document_id(filename: str, search_client: SearchClient, file_type: str 
     """Search for a document in the index based on filename."""
     try:
         if file_type == "pdf":
-            # For PDFs, search by exact file_name field
+            # More robust PDF search using a wildcard to handle potential formatting issues
+            # This searches for any document with a file_name that ends with the filename and .pdf
+            search_text = f"file_name:{filename}.pdf"
+            
             results = search_client.search(
-                search_text=f"file_name:'{filename}.pdf'",
-                select=["id"],
+                search_text=search_text,
+                select=["id", "file_name"],  # Include file_name to log what was found
                 include_total_count=True
             )
         else:
@@ -136,10 +139,32 @@ def find_document_id(filename: str, search_client: SearchClient, file_type: str 
         
         if not results_list:
             logging.info(f"No document found with filename: {filename}")
-            return None
+            
+            # If initial search failed, try with a more flexible approach for PDFs
+            if file_type == "pdf":
+                # Try a more general search
+                more_general_search = f'"{filename}"'
+                logging.info(f"Trying more general search: {more_general_search}")
+                
+                results = search_client.search(
+                    search_text=more_general_search,
+                    select=["id", "file_name"],
+                    include_total_count=True
+                )
+                
+                results_list = list(results)
+                if not results_list:
+                    logging.info(f"No document found with more general search: {more_general_search}")
+                    return None
+            else:
+                return None
             
         if len(results_list) > 1:
             logging.warning(f"Multiple documents found with filename: {filename}")
+            # Log all found filenames for debugging
+            for doc in results_list:
+                if "file_name" in doc:
+                    logging.info(f"Found document with file_name: {doc['file_name']}")
             
         return results_list[0]["id"]
         
@@ -211,7 +236,7 @@ async def delete_from_index(req: func.HttpRequest) -> func.HttpResponse:
             # Move HTML file
             html_moved = move_blob(
                 blob_service_client,
-                "htmlcontent",
+                "htmlcontent-master",
                 "htmlcontent-archieve",
                 html_name
             )
@@ -234,7 +259,7 @@ async def delete_from_index(req: func.HttpRequest) -> func.HttpResponse:
             # Move PDF file
             pdf_moved = move_blob(
                 blob_service_client,
-                "evidencefiles",
+                "evidencefiles-master",
                 "evidencefiles-archieve",
                 pdf_name
             )
