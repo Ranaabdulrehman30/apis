@@ -6,7 +6,7 @@ from azure.search.documents import SearchClient
 from typing import Optional, List, Union, Dict
 import os
 from dataclasses import dataclass
-import re
+from urllib.parse import unquote
 
 # Initialize the function app
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -227,7 +227,7 @@ def extract_pdf_filename(pdf_url: str) -> str:
     """
     try:
         return pdf_url.split('/')[-1]
-    except:
+    except (AttributeError, IndexError):  # Specify the exceptions you expect
         return ""
 
 def search_single_index(
@@ -283,7 +283,6 @@ def extract_pdf_stem(pdf_url: str) -> str:
     Extract filename without extension from PDF URL, handling URL encoding.
     """
     try:
-        from urllib.parse import unquote
         # Get the filename from the URL
         filename = pdf_url.split('/')[-1]
         # URL decode the filename
@@ -300,7 +299,6 @@ def normalize_string(s: str) -> str:
     """
     Normalize string by removing special characters and extra spaces.
     """
-    import re
     # Replace special characters with spaces
     s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s)
     # Replace multiple spaces with single space
@@ -349,7 +347,6 @@ def extract_final_path_segment(url: str) -> str:
         filename = parts[-1]
         
         # URL decode
-        from urllib.parse import unquote
         filename = unquote(filename)
         
         return filename
@@ -367,8 +364,6 @@ def normalize_for_comparison(text: str) -> str:
     Returns:
         str: Normalized text
     """
-    import re
-    from urllib.parse import unquote
     
     try:
         # Double decode to handle potential double encoding
@@ -539,7 +534,6 @@ def search_function(req: func.HttpRequest) -> func.HttpResponse:
                     'Status': result.get('Status', ''),
                     'CFDA_number': result.get('CFDA_number', ''),
                     'summary': result.get('summary', ''),
-                    'title': result.get('title', ''),
                     'published_date': result.get('published_date', ''),
                     'changed_date': result.get('changed_date', '')
                 }
@@ -565,7 +559,6 @@ def search_function(req: func.HttpRequest) -> func.HttpResponse:
 
                             try:
                                 # Extract primary filename
-                                from urllib.parse import unquote
                                 primary_filename = unquote(unquote(pdf_url.split('/')[-1]))
                                 primary_basename = primary_filename.rsplit('.', 1)[0].lower()
                                 

@@ -5,7 +5,6 @@ from azure.search.documents import SearchClient
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
 import os
-import re
 from typing import Optional, Tuple
 
 app = func.FunctionApp()
