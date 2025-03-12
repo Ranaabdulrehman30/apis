@@ -109,6 +109,8 @@ def main(myblob: func.InputStream, context: func.Context):
             source_properties = source_blob.get_blob_properties() 
             copy = target_blob.start_copy_from_url(source_blob.url)
 
+            print(f"Copying blob with size: {source_properties.size} bytes")
+
             # Wait for copy to complete
             while copy.status == 'pending':
                 import time
