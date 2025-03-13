@@ -97,7 +97,7 @@ SEARCH_ADMIN_KEY - Admin key for Azure Cognitive Search service
 ```bash
 curl -X POST https://<function-app-name>.azurewebsites.net/api/delete \
      -H "Content-Type: application/json" \
-     -d '{"document_id": "doc123", "index_name": "html-dev-index-updated-11"}'
+     -d '{"filename": "TEST 2023 1120S - 2", "file_type": "pdf"}'
 ```
 
 ### Search HTML Content
